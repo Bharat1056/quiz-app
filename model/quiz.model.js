@@ -37,6 +37,10 @@ const quizSchema = new Schema(
       type: [mongoose.Schema.Types.ObjectId],
       ref: "User",
     },
+    quizType: {
+      type: String,
+      enum: ["submit-once", "submit-many"],
+    },
   },
   { timestamps: true }
 );

@@ -2,6 +2,10 @@ import mongoose, { Schema } from "mongoose";
 
 const questionSchema = new Schema(
   {
+    quizId: {
+      type: mongoose.Schema.ObjectId,
+      ref: "Quiz",
+    },
     questionText: {
       type: String,
       require: true,
@@ -21,6 +25,14 @@ const questionSchema = new Schema(
     correctAnswer: {
       type: String,
       default: "",
+    },
+    marks: {
+      type: Number,
+      required: true,
+    },
+    submitted: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }

@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { controller_name } from "../controller/user.controller.js";
+import { createQuiz } from "../controller/user.controller.js";
 
 const router = Router();
 
-router.route("/router_name").post(controller_name);
+router.route("/create").post(createQuiz);
 
 export default router;

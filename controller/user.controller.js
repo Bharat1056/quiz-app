@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { google } from "googleapis";
 import axios from "axios";
 import cron from "node-cron";
+import { Question } from "../model/question.model.js";
 
 export const createUser = asyncHandler(async (req, res) => {
   const { role, email, regdNo, name, password } = req.body;
@@ -170,3 +171,60 @@ export const joinQuiz = asyncHandler(async (req, res) => {
 
 // attempt quiz - WebSocket
 // user leave - socket breaks - quiz may/mayn't submitted
+
+export const submitAnswer = async (msg, ws) => {
+  const { quizId, userId, questionId, answer } = JSON.parse(msg);
+
+  if (!quizId || !userId || !questionId) {
+    ws.send(apiResponse(null, "All fields are required"));
+    return;
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    ws.send(apiResponse(null, "User not found"));
+    return;
+  }
+
+  const quiz = await Quiz.findById(quizId);
+  if (!quiz) {
+    ws.send(apiResponse(null, "Quiz not found"));
+    return;
+  }
+
+  const question = quiz.questions.find((q) => q._id === questionId);
+  if (!question) {
+    ws.send(apiResponse(null, "Question not found"));
+    return;
+  }
+
+  const remainingTime = Date.now() - (quiz.startTime + quiz.timeLimit);
+
+  if (remainingTime <= 0) {
+    await Question.updateMany({ quizId }, { $set: { submitted: true } });
+    ws.send(apiResponse(null, "Quiz Time expired"));
+  }
+
+  const existingMark = user.marks.find(
+    (mark) => mark.quizId.toString() === quizId
+  );
+
+  if (question.correctAnswer === answer) {
+    if (existingMark) {
+      existingMark.marks += question.marks;
+    } else {
+      user.marks.push({ quizId, marks: question.marks });
+    }
+    await user.save();
+  }
+
+  if (quiz.quizType === "submit-once") {
+    question.submitted = true;
+  } else {
+    question.submitted = false;
+  }
+
+  await question.save();
+
+  ws.send(apiResponse(user));
+};

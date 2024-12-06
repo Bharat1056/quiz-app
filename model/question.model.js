@@ -1,9 +1,9 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { mongo, Schema } from "mongoose";
 
 const questionSchema = new Schema(
   {
     quizId: {
-      type: mongoose.Schema.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       ref: "Quiz",
     },
     questionText: {
@@ -20,19 +20,18 @@ const questionSchema = new Schema(
     },
     options: {
       type: [String],
-      default: [],
     },
     correctAnswer: {
       type: String,
       default: "",
     },
-    marks: {
+    mark: {
       type: Number,
       required: true,
     },
     submitted: {
-      type: Boolean,
-      default: false,
+      type: [mongoose.Schema.ObjectId],
+      ref: "Submission",
     },
   },
   { timestamps: true }

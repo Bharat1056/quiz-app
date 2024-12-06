@@ -1,25 +1,5 @@
 import mongoose, { Schema } from "mongoose";
 
-const marksSchema = new Schema(
-  {
-    quizId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Quiz",
-      required: true,
-    },
-    marks: {
-      type: Number,
-      default: 0,
-      required: true,
-    },
-    submitted: {
-      type: Boolean,
-      default: false,
-    },
-  },
-  { timestamps: true }
-);
-
 const userSchema = new Schema(
   {
     email: {
@@ -49,12 +29,12 @@ const userSchema = new Schema(
       default: "user",
       required: true,
     },
-    marks: {
-      type: [marksSchema],
+    userMarks: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: "Marks",
     },
   },
   { timeStamps: true }
 );
 
-export const Marks = mongoose.model("Marks", marksSchema);
 export const User = mongoose.model("User", userSchema);

@@ -9,6 +9,7 @@ import axios from "axios";
 import cron from "node-cron";
 import { Question } from "../model/question.model.js";
 
+// user create
 export const createUser = asyncHandler(async (req, res) => {
   const { role, email, regdNo, name, password } = req.body;
 
@@ -38,7 +39,7 @@ export const createUser = asyncHandler(async (req, res) => {
   let newUser;
   if (role === "user") {
     newUser = new User({ role, regdNo, name });
-  } else {
+  } else if (role === "admin") {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     newUser = new User({ role, email, name, password: hashedPassword });
@@ -49,8 +50,10 @@ export const createUser = asyncHandler(async (req, res) => {
   res.status(201).json(apiResponse(newUser));
 });
 
+
+// quiz create
 export const createQuiz = asyncHandler(async (req, res) => {
-  const { quizName, totalMarks, timeLimit, startTime } = req.body;
+  const { quizName, totalMarks, timeLimit, startTime, quizType } = req.body;
 
   if (!quizName || !totalMarks || !timeLimit || !startTime) {
     throw new apiError(400, "All fields are required");
@@ -61,6 +64,7 @@ export const createQuiz = asyncHandler(async (req, res) => {
     totalMarks,
     timeLimit,
     startTime,
+    quizType: quizType ? quizType : "submit-once",
     createdBy: req.user._id, // via middleware
   });
   const calendar = google.calendar("v3");
@@ -88,7 +92,7 @@ export const createQuiz = asyncHandler(async (req, res) => {
     attendees: [{ email: req.user.email }],
   };
 
-  await calendar.events.insert({
+  calendar.events.insert({
     auth: authClient,
     calendarId: "primary",
     resource: event,
@@ -113,6 +117,8 @@ export const createQuiz = asyncHandler(async (req, res) => {
   res.status(201).json(apiResponse(newQuiz));
 });
 
+
+// activate quiz
 export const activateQuiz = asyncHandler(async (req, res) => {
   const { quizId } = req.params;
 
@@ -128,6 +134,8 @@ export const activateQuiz = asyncHandler(async (req, res) => {
   res.status(200).json(apiResponse(quiz));
 });
 
+
+// get marks of that particular user
 export const getMarksOfUser = asyncHandler(async (req, res) => {
   const { userId } = req.params;
 
@@ -141,6 +149,8 @@ export const getMarksOfUser = asyncHandler(async (req, res) => {
   res.status(200).json(apiResponse(user));
 });
 
+
+// get all users marks based on quiz
 export const getMarksOfQuiz = asyncHandler(async (req, res) => {
   const { quizId } = req.params;
 
@@ -152,6 +162,8 @@ export const getMarksOfQuiz = asyncHandler(async (req, res) => {
   res.status(200).json(apiResponse(quiz));
 });
 
+
+// join in the quiz
 export const joinQuiz = asyncHandler(async (req, res) => {
   const { quizId } = req.params;
   const { userId } = req.body;
@@ -164,10 +176,55 @@ export const joinQuiz = asyncHandler(async (req, res) => {
   if (!quiz) {
     throw new apiError(404, "Quiz not found");
   }
+  if (!quiz.available) {
+    throw new apiError(400, "Quiz is not started yet");
+  }
   quiz.attendees.push(userId);
   await quiz.save();
   res.status(200).json(apiResponse(quiz));
 });
+
+
+// create question
+export const createQuestion = asyncHandler(async (req, res) => {
+  const { quizId, questionText, questionType, options, correctAnswer, mark } =
+    req.body;
+
+  if (!quizId || !questionText || !mark || !correctAnswer) {
+    throw new apiError(400, "All fields are required");
+  }
+
+  const quiz = await Quiz.findById(quizId);
+  if (!quiz) {
+    throw new apiError(404, "Quiz not found");
+  }
+
+  const newQuestionData = {
+    quizId,
+    questionText,
+    questionType: questionType ? questionType : "direct-answer",
+    correctAnswer,
+    mark,
+  };
+
+  if (questionType && questionType !== "direct-answer") {
+    newQuestionData.options = options;
+  }
+
+  const newQuestion = new Question(newQuestionData);
+
+  await newQuestion.save();
+
+  quiz.questions.push(newQuestion._id);
+  await quiz.save();
+
+  res.status(201).json(apiResponse(newQuestion));
+});
+
+// submit an question
+
+// submit all question at once
+
 
 // attempt quiz - WebSocket
 // user leave - socket breaks - quiz may/mayn't submitted
@@ -201,11 +258,30 @@ export const submitAnswer = async (msg, ws) => {
   const remainingTime = Date.now() - (quiz.startTime + quiz.timeLimit);
 
   if (remainingTime <= 0) {
-    await Question.updateMany({ quizId }, { $set: { submitted: true } });
+    await Question.updateMany(
+      { quizId },
+      { $set: { submitted: { status: true } } }
+    );
     ws.send(apiResponse(null, "Quiz Time expired"));
   }
 
-  const existingMark = user.marks.find(
+  const isAlreadySubmitted = await Question.findOne({
+    _id: questionId,
+    "submitted.userId": userId,
+    "submitted.status": true,
+  });
+
+  if (isAlreadySubmitted) {
+    ws.send(apiResponse(null, "Answer already submitted"));
+    return;
+  }
+
+  await Question.updateOne(
+    { _id: questionId },
+    { $push: { submitted: true, questionId, userId } }
+  );
+
+  const existingMark = user.userMarks.find(
     (mark) => mark.quizId.toString() === quizId
   );
 
